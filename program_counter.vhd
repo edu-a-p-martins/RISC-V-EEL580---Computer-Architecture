@@ -1,7 +1,7 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
-
+-- corrigido um "<=" no ultimo if
 entity program_counter is
     port (
         clk   : in std_logic;
@@ -31,7 +31,7 @@ begin
             --Only activates the PC when we arent loading and there is no stall
             if ld_enable = '0' and stall = '0' then 
                 --If we either do a jump or take a branch
-                if branch = '1' or jump <= '1' then
+                if branch = '1' or jump = '1' then
                     pc_register <= target_address;
                 else
                     pc_register <= std_logic_vector(unsigned(pc_register) + 4);

@@ -1,7 +1,7 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
-
+-- sinal de reset estava assincrono, agora eh sincrono
 
 entity register_file is
     port (
@@ -26,17 +26,19 @@ architecture rtl of register_file is
     type register_array is array (0 to 31) of std_logic_vector(31 downto 0); 
     signal registers : register_array := (others => (others => '0'));
 begin
-    --Sincronous writing
-    write_process : process(clk, reset)
+    --Synchronous reset and writing
+    write_process : process(clk)
     begin
-        if reset = '1' then
-            --Resets all of the registers
-            registers <= (others => (others => '0'));
-        elsif rising_edge(clk) then
-            --Writing the value in the register
-            if write = '1' and registerdestination_address /= "00000" then
-                registers(to_integer(unsigned(registerdestination_address))) <= registerdestination_wdata;
-            end if; 
+        if rising_edge(clk) then
+            if reset = '1' then
+                --Resets all of the registers (synchronous)
+                registers <= (others => (others => '0'));
+            else
+                --Writing the value in the register
+                if write = '1' and registerdestination_address /= "00000" then
+                    registers(to_integer(unsigned(registerdestination_address))) <= registerdestination_wdata;
+                end if;
+            end if;
         end if;
     end process;
     --Assincronou reading process

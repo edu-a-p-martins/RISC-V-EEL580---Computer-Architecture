@@ -1,7 +1,8 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
-
+-- ld_enable zero?
+-- adicionado lui, ainda nao esta feito
 ---------------------------------------------------------------
 --IF-ID register
 ---------------------------------------------------------------
@@ -86,7 +87,8 @@ entity id_ex_register is
         reg_write_id   : in  std_logic;
         jump_id        : in  std_logic;
         jalr_id       : in  std_logic;
-        auipc_id       : in  std_logic;
+           auipc_id       : in  std_logic;
+           lui_id         : in  std_logic;
 
         --EX Outputs
         pc_ex : out std_logic_vector(31 downto 0);
@@ -107,7 +109,8 @@ entity id_ex_register is
         reg_write_ex   : out  std_logic;
         jump_ex        : out  std_logic;
         jalr_ex       : out  std_logic;
-        auipc_ex       : out  std_logic
+           auipc_ex       : out  std_logic;
+           lui_ex         : out  std_logic
     );
 end entity id_ex_register;
 
@@ -136,7 +139,8 @@ begin
             reg_write_ex   <= '0';
             jump_ex        <= '0';
             jalr_ex        <= '0';
-            auipc_ex       <= '0';
+                auipc_ex       <= '0';
+                lui_ex         <= '0';
         elsif rising_edge(clk) then 
             if ld_enable = '0' then
                 --Does a NOP 
@@ -159,7 +163,8 @@ begin
                     reg_write_ex <= '0';
                     jump_ex <= '0';
                     jalr_ex <= '0';
-                    auipc_ex <= '0';
+                        auipc_ex <= '0';
+                        lui_ex <= '0';
                 --Passes on the values
                 elsif stall = '0' then
                     pc_ex <= pc_id;
@@ -180,7 +185,8 @@ begin
                     reg_write_ex <= reg_write_id;
                     jump_ex <= jump_id;
                     jalr_ex <= jalr_id;
-                    auipc_ex <= auipc_id;
+                        auipc_ex <= auipc_id;
+                        lui_ex <= lui_id;
                 end if;
             end if;
         end if ;

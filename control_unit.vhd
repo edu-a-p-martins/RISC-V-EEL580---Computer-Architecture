@@ -18,7 +18,8 @@ entity control_unit is
         reg_write : out std_logic; -- Decides if the register will be written
         jump : out std_logic; -- Sinalizes the JUMP instruction
         jalr : out std_logic; -- Sinalizes the JALR instruction
-        aiupc : out std_logic -- Sinalizes the AIUPC command
+        lui  : out std_logic; -- Sinalizes the LUI instruction
+        auipc : out std_logic -- Sinalizes the AUIPC command
 
     );
 end entity;
@@ -39,7 +40,8 @@ begin
     reg_write <= '0';
     jalr <= '0';
     jump <= '0';
-    aiupc <= '0';
+    auipc <= '0';
+    lui <= '0';
     --Analyzes the Opcode and the different types of instructions
     case opcode is
         --R-Type
@@ -133,12 +135,13 @@ begin
             reg_write <= '1';
             ALU_src <= '1';
             ALU_op <= "0111";
+            lui <= '1';
         --U-Type (auipc)
-        when "0010111" =>
+            when "0010111" =>
             reg_write <= '1';
             ALU_src <= '1';
             ALU_op <= "0000";
-            aiupc <= '1';
+            auipc <= '1';
         --J-Type
         when "1101111" =>
             reg_write <= '1';
