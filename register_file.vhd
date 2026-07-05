@@ -4,7 +4,7 @@ use ieee.numeric_std.all;
 -- sinal de reset estava assincrono, agora eh sincrono
 
 entity register_file is
-    port (
+    port 
         clk : in std_logic;
         reset : in std_logic;
         write : in std_logic; --Responsible from allowing to write in the other registers
