@@ -18,8 +18,8 @@ entity register_file is
         --Data extracted from the registers
         rs1_data_o : out std_logic_vector(31 downto 0);
         rs2_data_o : out std_logic_vector(31 downto 0);
-        reg_debug_o  : out std_logic_vector(31 downto 0);  -- Registrador selecionado para debug
-        reg_sel_i    : in  std_logic_vector(4 downto 0)    -- Seleção de registrador para debug
+        reg_debug_o  : out std_logic_vector(31 downto 0);  -- Register
+        reg_sel_i    : in  std_logic_vector(4 downto 0)    -- Selecting debug 
 
 
     );
@@ -46,7 +46,7 @@ begin
             end if;
         end if;
     end process;
-    --Assincronou reading process
+    --Assincronous reading process
     rs1_data_o <= (others => '0') when rs1_addr_i = "00000" else registers(to_integer(unsigned(rs1_addr_i)));
     rs2_data_o <= (others => '0') when rs2_addr_i = "00000" else registers(to_integer(unsigned(rs2_addr_i)));
 

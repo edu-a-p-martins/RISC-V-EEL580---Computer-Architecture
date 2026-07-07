@@ -16,11 +16,16 @@ entity control_unit is
         alu_src_o : out std_logic; -- Decides the source to the ALU
         alu_ctrl_o : out std_logic_vector(3 downto 0); -- Code that decides the operation in the ALU
         branch_o : out std_logic; -- Decides on whether to branch_o or not
-        jump_o : out std_logic; -- Sinalizes the jump_o instruction
-        auipc_o : out std_logic; -- Sinalizes the auipc_o command
-        jalr_o : out std_logic; -- Sinalizes the jalr_o instruction
-        lui_o  : out std_logic -- Sinalizes the lui_o instruction
-
+        jump_o : out std_logic; -- Sinalizes the jump instruction
+        auipc_o : out std_logic; -- Sinalizes the auipc command
+        jalr_o : out std_logic; -- Sinalizes the jalr instruction
+        lui_o  : out std_logic; -- Sinalizes the lui instruction
+        --Outputs that are related to the vectorial instructions
+        vector_instruction_o : out std_logic; --Sinalizes that the instruction is vectorial
+        vec_reg_write_o : out std_logic; --Analog to reg_wrte_o but for vectorial registers
+        vec_alu_src_o : out std_logic; --Decides the source of the vectorial ALU
+        vec_alu_ctrl_o : out std_logic_vector(3 downto 0); --Decides the operation in the ALU
+        vauipc_o : out std_logic --Sinalizes the vauipc command
     );
 end entity;
 
@@ -42,6 +47,12 @@ begin
     jump_o <= '0';
     auipc_o <= '0';
     lui_o <= '0';
+    vector_instruction_o <= '0';
+    vec_reg_write_o <= '0';
+    vec_alu_src_o <= '0';
+    vec_alu_ctrl_o <= "0000";
+    vauipc_o <= '0';
+
     --Analyzes the opcode_i and the different types of instructions
     case opcode_i is
         --R-Type
@@ -147,6 +158,61 @@ begin
             reg_write_o <= '1';
             alu_ctrl_o <= "0000";
             jump_o <= '1';
+        --Vectorial R-Type
+        when "01101100" =>
+            vector_instruction_o <= '1';
+            vec_reg_write_o <= '1';
+
+            --Sets the alu_ctrl_o
+            case funct3_i is
+                --Addition and Subtraction
+                when "000"=>
+                    if funct7_i = "0000000" then
+                        vec_alu_ctrl_o <= "0000"; --ADD
+                    elsif funct7_i = "0100000" then
+                        vec_alu_ctrl_o <= "0001";
+                    end if;
+                --Shift Left
+                when "001" =>
+                    vec_alu_ctrl_o <= "0010";
+                --Shift Right
+                when "101" =>
+                    vec_alu_ctrl_o <= "0011";
+                when others =>
+                    null;
+            end case;
+        --Vectorial I-Type
+        when "01111100" =>
+            vector_instruction_o <= '1';
+            vec_alu_src_o <= '1';
+            vec_reg_write_o <= '1';
+
+            --Sets the alu_ctrl_o
+            case funct3_i is
+                --Addition and Subtraction
+                when "000"=>
+                    if funct7_i = "0000000" then
+                        vec_alu_ctrl_o <= "0000"; --ADD
+                    elsif funct7_i = "0100000" then
+                        vec_alu_ctrl_o <= "0001";
+                    end if;
+                --Shift Left
+                when "001" =>
+                    vec_alu_ctrl_o <= "0010";
+                --Shift Right
+                when "101" =>
+                    vec_alu_ctrl_o <= "0011";
+                when others =>
+                    null;
+            end case;
+        --Vectorial AIUPC
+        when "11111100" =>
+            vauipc_o <= '1';
+            vector_instruction_o <= '1'; 
+            vec_reg_write_o <= '1';
+            vec_alu_ctrl_o <= "0000";
+            vec_alu_src_o <= '1';
+
         when others =>
             null;
     end case;
