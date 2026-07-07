@@ -1,8 +1,3 @@
--- =============================================================================
--- RISC-V CPU Top-Level - Pipeline de 5 estágios (RV32I + Extensão Vetorial)
--- Integra todos os componentes da CPU, incluindo datapath vetorial
--- =============================================================================
-
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -11,19 +6,18 @@ entity riscv_cpu_vector is
     port (
         clk_i           : in  std_logic;
         reset_i         : in  std_logic;
-        load_enable_i   : in  std_logic;  -- Durante carga de memória, CPU pausa
+        load_enable_i   : in  std_logic; 
         
-        -- Interface com Memória de Instruções (ROM)
-        imem_addr_o     : out std_logic_vector(31 downto 0);
-        imem_data_i     : in  std_logic_vector(31 downto 0);
-        
-        -- Interface com Memória de Dados (RAM)
-        dmem_addr_o     : out std_logic_vector(31 downto 0);
-        dmem_wdata_o    : out std_logic_vector(31 downto 0);
-        dmem_rdata_i    : in  std_logic_vector(31 downto 0);
+        dmem_addr_o     : out std_logic_vector(31 downto 0); --RAM MEMORY ADDRESS
+        dmem_wdata_o    : out std_logic_vector(31 downto 0); --RAM MEMORY WRITE DATA
+        dmem_rdata_i    : in  std_logic_vector(31 downto 0); --RAM MEMORY READ DATA
         dmem_we_o       : out std_logic;
         
-        -- Debug outputs escalares
+        imem_addr_o     : out std_logic_vector(31 downto 0); -- ROM MEMORY ADDRESS
+        imem_data_i     : in  std_logic_vector(31 downto 0); -- ROM MEMORY DATA
+        
+        
+        -- VARIABLES FOCUSED ON DEBUGGING
         pc_debug_o      : out std_logic_vector(31 downto 0);
         instr_debug_o   : out std_logic_vector(31 downto 0);
         alu_result_debug_o : out std_logic_vector(31 downto 0);
@@ -35,38 +29,39 @@ entity riscv_cpu_vector is
         hazard_stall_o  : out std_logic;
         hazard_flush_o  : out std_logic;
         
-        -- Debug outputs vetoriais (4 lanes de 32 bits cada, para compatibilidade com Digital)
-        vreg_debug_lane0_o  : out std_logic_vector(31 downto 0);  -- Lane 0 do vreg selecionado
-        vreg_debug_lane1_o  : out std_logic_vector(31 downto 0);  -- Lane 1 do vreg selecionado
-        vreg_debug_lane2_o  : out std_logic_vector(31 downto 0);  -- Lane 2 do vreg selecionado
-        vreg_debug_lane3_o  : out std_logic_vector(31 downto 0);  -- Lane 3 do vreg selecionado
-        vreg_sel_i          : in  std_logic_vector(4 downto 0);   -- Seleção de vreg
-        valu_result_lane0_o : out std_logic_vector(31 downto 0);  -- Lane 0 do resultado VALU
-        valu_result_lane1_o : out std_logic_vector(31 downto 0);  -- Lane 1 do resultado VALU
-        valu_result_lane2_o : out std_logic_vector(31 downto 0);  -- Lane 2 do resultado VALU
-        valu_result_lane3_o : out std_logic_vector(31 downto 0)   -- Lane 3 do resultado VALU
-    );
-end entity riscv_cpu_vector;
-
-architecture rtl of riscv_cpu_vector is
-
-    -- =========================================================================
-    -- Sinais do Estágio IF (Instruction Fetch)
-    -- =========================================================================
+        -- VARIABLES FOCUSED ON DEBUGGING (VECTORIAL)
+        vreg_debug_lane0_o  : out std_logic_vector(31 downto 0);
+        vreg_debug_lane1_o  : out std_logic_vector(31 downto 0);
+        vreg_debug_lane2_o  : out std_logic_vector(31 downto 0);
+        vreg_debug_lane3_o  : out std_logic_vector(31 downto 0);
+        vreg_sel_i          : in  std_logic_vector(4 downto 0);
+        valu_result_lane0_o : out std_logic_vector(31 downto 0);
+        valu_result_lane1_o : out std_logic_vector(31 downto 0);
+        valu_result_lane2_o : out std_logic_vector(31 downto 0);
+        valu_result_lane3_o : out std_logic_vector(31 downto 0)
+        );
+    end entity riscv_cpu_vector;
+    
+    architecture rtl of riscv_cpu_vector is
+        
+    -- Hazard Control
+    signal stall_if       : std_logic;
+    signal stall_id       : std_logic;
+    signal flush_id       : std_logic;
+    signal flush_ex       : std_logic;
+    signal hazard_type    : std_logic_vector(1 downto 0);
+        
+    -- IF Signals
     signal if_pc          : std_logic_vector(31 downto 0);
     signal if_pc_plus4    : std_logic_vector(31 downto 0);
     signal if_instruction : std_logic_vector(31 downto 0);
-    
-    -- =========================================================================
-    -- Sinais do Registrador IF/ID
-    -- =========================================================================
+        
+    --IF/ID Registers
     signal id_pc          : std_logic_vector(31 downto 0);
-    signal id_pc_plus4    : std_logic_vector(31 downto 0);
     signal id_instruction : std_logic_vector(31 downto 0);
+    signal id_pc_plus4    : std_logic_vector(31 downto 0);
     
-    -- =========================================================================
-    -- Sinais do Estágio ID (Instruction Decode) - Escalares
-    -- =========================================================================
+    --ID SIgnals
     signal id_opcode      : std_logic_vector(6 downto 0);
     signal id_rd          : std_logic_vector(4 downto 0);
     signal id_funct3      : std_logic_vector(2 downto 0);
@@ -90,7 +85,7 @@ architecture rtl of riscv_cpu_vector is
     signal id_jalr        : std_logic;
     signal id_lui         : std_logic;
     
-    -- Sinais de controle vetoriais do ID
+    -- Vectorial ID variables
     signal id_ctrl_is_vector : std_logic;
     signal id_vreg_write  : std_logic;
     signal id_valu_ctrl   : std_logic_vector(3 downto 0);
@@ -101,9 +96,7 @@ architecture rtl of riscv_cpu_vector is
     signal id_vs1_data    : std_logic_vector(127 downto 0);
     signal id_vs2_data    : std_logic_vector(127 downto 0);
     
-    -- =========================================================================
-    -- Sinais do Registrador ID/EX - Escalares
-    -- =========================================================================
+    -- ID/EX Signals
     signal ex_pc          : std_logic_vector(31 downto 0);
     signal ex_pc_plus4    : std_logic_vector(31 downto 0);
     signal ex_rs1_data    : std_logic_vector(31 downto 0);
@@ -125,7 +118,7 @@ architecture rtl of riscv_cpu_vector is
     signal ex_jalr        : std_logic;
     signal ex_lui         : std_logic;
     
-    -- Sinais vetoriais do ID/EX
+    -- Vectorial ID/EX Signals
     signal ex_vs1_data    : std_logic_vector(127 downto 0);
     signal ex_vs2_data    : std_logic_vector(127 downto 0);
     signal ex_is_vector   : std_logic;
@@ -134,9 +127,7 @@ architecture rtl of riscv_cpu_vector is
     signal ex_valu_src    : std_logic;
     signal ex_vauipc      : std_logic;
     
-    -- =========================================================================
-    -- Sinais do Estágio EX (Execute) - Escalares
-    -- =========================================================================
+    -- EX Signals
     signal ex_alu_a       : std_logic_vector(31 downto 0);
     signal ex_alu_b       : std_logic_vector(31 downto 0);
     signal ex_alu_result  : std_logic_vector(31 downto 0);
@@ -148,7 +139,7 @@ architecture rtl of riscv_cpu_vector is
     signal ex_rs1_forwarded : std_logic_vector(31 downto 0);
     signal ex_rs2_forwarded : std_logic_vector(31 downto 0);
     
-    -- Sinais vetoriais do EX
+    -- Vectorial EX Signals
     signal ex_valu_a      : std_logic_vector(127 downto 0);
     signal ex_valu_b      : std_logic_vector(127 downto 0);
     signal ex_valu_result : std_logic_vector(127 downto 0);
@@ -157,9 +148,7 @@ architecture rtl of riscv_cpu_vector is
     signal ex_vs1_forwarded : std_logic_vector(127 downto 0);
     signal ex_vs2_forwarded : std_logic_vector(127 downto 0);
     
-    -- =========================================================================
-    -- Sinais do Registrador EX/MEM - Escalares
-    -- =========================================================================
+    -- MEM Signals
     signal mem_pc_plus4   : std_logic_vector(31 downto 0);
     signal mem_alu_result : std_logic_vector(31 downto 0);
     signal mem_rs2_data   : std_logic_vector(31 downto 0);
@@ -171,21 +160,16 @@ architecture rtl of riscv_cpu_vector is
     signal mem_mem_read   : std_logic;
     signal mem_branch     : std_logic;
     signal mem_jump       : std_logic;
+    signal mem_read_data  : std_logic_vector(31 downto 0);
     
-    -- Sinais vetoriais do EX/MEM
+    -- Vectorial MEM Signals
     signal mem_valu_result : std_logic_vector(127 downto 0);
     signal mem_vrd_addr    : std_logic_vector(4 downto 0);
     signal mem_is_vector   : std_logic;
     signal mem_vreg_write  : std_logic;
     
-    -- =========================================================================
-    -- Sinais do Estágio MEM (Memory Access)
-    -- =========================================================================
-    signal mem_read_data  : std_logic_vector(31 downto 0);
     
-    -- =========================================================================
-    -- Sinais do Registrador MEM/WB - Escalares
-    -- =========================================================================
+    -- MEM/WB Signals
     signal wb_pc_plus4    : std_logic_vector(31 downto 0);
     signal wb_alu_result  : std_logic_vector(31 downto 0);
     signal wb_mem_data    : std_logic_vector(31 downto 0);
@@ -194,44 +178,28 @@ architecture rtl of riscv_cpu_vector is
     signal wb_mem_to_reg  : std_logic;
     signal wb_jump        : std_logic;
     
-    -- Sinais vetoriais do MEM/WB
+    -- Vectorial MEM/WB Signals
     signal wb_valu_result : std_logic_vector(127 downto 0);
     signal wb_vrd_addr    : std_logic_vector(4 downto 0);
     signal wb_vreg_write  : std_logic;
     
-    -- =========================================================================
-    -- Sinais do Estágio WB (Write Back)
-    -- =========================================================================
+    -- WB Signals
     signal wb_write_data  : std_logic_vector(31 downto 0);
     
-    -- =========================================================================
-    -- Sinais de Controle de Hazards
-    -- =========================================================================
-    signal stall_if       : std_logic;
-    signal stall_id       : std_logic;
-    signal flush_id       : std_logic;
-    signal flush_ex       : std_logic;
-    signal hazard_type    : std_logic_vector(1 downto 0);
-    
-    -- Sinal interno para debug de registradores vetoriais
-    signal vreg_debug_internal : std_logic_vector(127 downto 0);
 
-    -- =========================================================================
-    -- Constante para expansão de imediato para vetor
-    -- =========================================================================
-    function expand_imm_to_vector(imm : std_logic_vector(31 downto 0)) 
+    signal vreg_debug_internal : std_logic_vector(127 downto 0); --Vectorial debug
+
+    -- Function created with the sole purpose of expanding the immediate to a vector
+    function imm_vector(immediate : std_logic_vector(31 downto 0)) 
         return std_logic_vector is
     begin
-        return imm & imm & imm & imm;
+        return immediate & immediate & immediate & immediate;
     end function;
 
 begin
 
-    -- =========================================================================
-    -- Estágio IF: Instruction Fetch
-    -- =========================================================================
-    
-    U_PC : entity work.program_counter
+    -- Initialization of the Program Counter
+    Program_Counter : entity work.program_counter
         port map (
             clk_i          => clk_i,
             reset_i        => reset_i,
@@ -243,15 +211,11 @@ begin
             pc_o           => if_pc,
             pc_plus4_o     => if_pc_plus4
         );
-    
     imem_addr_o    <= if_pc;
     if_instruction <= imem_data_i;
     
-    -- =========================================================================
-    -- Registrador IF/ID
-    -- =========================================================================
-    
-    U_IF_ID : entity work.if_id_reg
+    --IF/ID Register
+    IF_ID_Register : entity work.if_id_reg
         port map (
             clk_i         => clk_i,
             reset_i       => reset_i,
@@ -265,12 +229,9 @@ begin
             pc_plus4_o    => id_pc_plus4,
             instruction_o => id_instruction
         );
-    
-    -- =========================================================================
-    -- Estágio ID: Instruction Decode
-    -- =========================================================================
-    
-    U_DECODER : entity work.instruction_decoder
+            
+    --Initialization of the Instruction Decoder component
+    Instruction_Decoder : entity work.instruction_decoder
         port map (
             instruction_i => id_instruction,
             opcode_o      => id_opcode,
@@ -282,7 +243,7 @@ begin
             imm_o         => id_imm,
             instr_type_o  => id_instr_type
         );
-    
+    --Initialization of the Control Unity
     U_CONTROL : entity work.control_unit
         port map (
             opcode_i     => id_opcode,
@@ -306,8 +267,8 @@ begin
             vauipc_o     => id_vauipc
         );
     
-    -- Banco de registradores escalares
-    U_REGFILE : entity work.register_file
+    -- Initialization of the Register File
+    Register_File : entity work.register_file
         port map (
             clk_i       => clk_i,
             reset_i     => reset_i,
@@ -322,8 +283,8 @@ begin
             reg_sel_i   => reg_sel_i
         );
     
-    -- Banco de registradores vetoriais
-    U_VREGFILE : entity work.vectorial_register_file
+    --Initialization of the Vectorial Register File
+    Vectorial_Register_File : entity work.vectorial_register_file
         port map (
             clk_i        => clk_i,
             reset_i      => reset_i,
@@ -338,11 +299,8 @@ begin
             vreg_sel_i   => vreg_sel_i
         );
     
-    -- =========================================================================
-    -- Registrador ID/EX (escalar)
-    -- =========================================================================
-    
-    U_ID_EX : entity work.id_ex_reg
+    --ID/EX Register
+    ID_EX_Register : entity work.id_ex_reg
         port map (
             clk_i         => clk_i,
             reset_i       => reset_i,
@@ -391,8 +349,8 @@ begin
             lui_o         => ex_lui
         );
     
-    -- Registrador ID/EX vetorial
-    U_ID_EX_V : entity work.id_ex_vreg
+    -- Vectorial ID/EX Register
+    ID_EX_Vectorial_Register : entity work.id_ex_vreg
         port map (
             clk_i         => clk_i,
             reset_i       => reset_i,
@@ -414,13 +372,9 @@ begin
             valu_src_o    => ex_valu_src,
             vauipc_o      => ex_vauipc
         );
-    
-    -- =========================================================================
-    -- Estágio EX: Execute
-    -- =========================================================================
-    
-    -- Forwarding escalar
-    U_FORWARDING : entity work.forwarding_unit
+        
+    -- Forwarding Unit
+    Forwarding_Unit : entity work.forwarding_unit
         port map (
             rs1_ex_i        => ex_rs1_addr,
             rs2_ex_i        => ex_rs2_addr,
@@ -432,8 +386,8 @@ begin
             forward_b_o     => ex_forward_b
         );
     
-    -- Forwarding vetorial
-    U_VFORWARDING : entity work.vector_forwarding_unit
+    -- Vectorial Forwarding
+    Vectorial_Forwarding : entity work.vector_forwarding_unit
         port map (
             vrs1_ex_i         => ex_rs1_addr,
             vrs2_ex_i         => ex_rs2_addr,
@@ -446,49 +400,51 @@ begin
             vforward_b_o     => ex_vforward_b
         );
     
-    -- Mux de forwarding escalar para operando A
-    P_FORWARD_A_MUX : process(ex_forward_a, ex_rs1_data, mem_alu_result, wb_write_data)
+    -- MUX dedicated to what happens in the forwarding A
+    Forwarding_A_MUX : process(ex_forward_a, ex_rs1_data, mem_alu_result, wb_write_data)
     begin
         case ex_forward_a is
+            --Does the Forwarding
             when "01"   => ex_rs1_forwarded <= mem_alu_result;
             when "10"   => ex_rs1_forwarded <= wb_write_data;
             when others => ex_rs1_forwarded <= ex_rs1_data;
         end case;
-    end process P_FORWARD_A_MUX;
+    end process Forwarding_A_MUX;
     
-    -- Mux de forwarding escalar para operando B
-    P_FORWARD_B_MUX : process(ex_forward_b, ex_rs2_data, mem_alu_result, wb_write_data)
+    -- MUX dedicated to what happens in the forwarding B
+    Forwarding_B_MUX : process(ex_forward_b, ex_rs2_data, mem_alu_result, wb_write_data)
     begin
         case ex_forward_b is
             when "01"   => ex_rs2_forwarded <= mem_alu_result;
             when "10"   => ex_rs2_forwarded <= wb_write_data;
             when others => ex_rs2_forwarded <= ex_rs2_data;
         end case;
-    end process P_FORWARD_B_MUX;
+    end process Forwarding_B_MUX;
     
-    -- Mux de forwarding vetorial para operando A
-    P_VFORWARD_A_MUX : process(ex_vforward_a, ex_vs1_data, mem_valu_result, wb_valu_result)
+    -- MUX dedicated to what happens in the forwarding A (Vectorial)
+    ForwardingV_A_MUX : process(ex_vforward_a, ex_vs1_data, mem_valu_result, wb_valu_result)
     begin
         case ex_vforward_a is
             when "01"   => ex_vs1_forwarded <= mem_valu_result;
             when "10"   => ex_vs1_forwarded <= wb_valu_result;
             when others => ex_vs1_forwarded <= ex_vs1_data;
         end case;
-    end process P_VFORWARD_A_MUX;
+    end process ForwardingV_A_MUX;
     
     -- Mux de forwarding vetorial para operando B
-    P_VFORWARD_B_MUX : process(ex_vforward_b, ex_vs2_data, mem_valu_result, wb_valu_result)
+    ForwardingV_B_MUX : process(ex_vforward_b, ex_vs2_data, mem_valu_result, wb_valu_result)
     begin
         case ex_vforward_b is
             when "01"   => ex_vs2_forwarded <= mem_valu_result;
             when "10"   => ex_vs2_forwarded <= wb_valu_result;
             when others => ex_vs2_forwarded <= ex_vs2_data;
         end case;
-    end process P_VFORWARD_B_MUX;
+    end process ForwardingV_B_MUX;
     
-    -- Seleção do operando A da ALU escalar
-    P_ALU_A_SELECT : process(ex_auipc, ex_lui, ex_pc, ex_rs1_forwarded)
+    -- Selects the operand A of the ALU
+    ALU_A_Selection : process(ex_auipc, ex_lui, ex_pc, ex_rs1_forwarded)
     begin
+        --Used in the AUIPC and LUI instructions
         if ex_auipc = '1' then
             ex_alu_a <= ex_pc;
         elsif ex_lui = '1' then
@@ -496,13 +452,13 @@ begin
         else
             ex_alu_a <= ex_rs1_forwarded;
         end if;
-    end process P_ALU_A_SELECT;
+    end process ALU_A_Selection;
     
-    -- Seleção do operando B da ALU escalar
+    -- Selecting the B operand based on the source
     ex_alu_b <= ex_imm when ex_alu_src = '1' else ex_rs2_forwarded;
     
-    -- ALU escalar
-    U_ALU : entity work.alu
+    -- Initialization of the ALU
+    ALU : entity work.alu
         port map (
             a_i        => ex_alu_a,
             b_i        => ex_alu_b,
@@ -513,30 +469,29 @@ begin
             overflow_o => open
         );
     
-    -- Seleção do operando A da VALU
-    P_VALU_A_SELECT : process(ex_vauipc, ex_pc, ex_vs1_forwarded)
+    -- Selecting ALU operand A (vectorial)
+    VALU_A_Selection : process(ex_vauipc, ex_pc, ex_vs1_forwarded)
     begin
         if ex_vauipc = '1' then
-            -- Para VAUIPC: replica PC em todas as lanes
             ex_valu_a <= ex_pc & ex_pc & ex_pc & ex_pc;
         else
             ex_valu_a <= ex_vs1_forwarded;
         end if;
-    end process P_VALU_A_SELECT;
-    
-    -- Seleção do operando B da VALU
-    P_VALU_B_SELECT : process(ex_valu_src, ex_imm, ex_vs2_forwarded)
+    end process VALU_A_Selection;
+
+    -- Selecting ALU operand B (vectorial)
+    VALU_B_Selection : process(ex_valu_src, ex_imm, ex_vs2_forwarded)
     begin
         if ex_valu_src = '1' then
-            -- Expande imediato para vetor
-            ex_valu_b <= expand_imm_to_vector(ex_imm);
+            -- Transforms the immediate value into a vector
+            ex_valu_b <= imm_vector(ex_imm);
         else
             ex_valu_b <= ex_vs2_forwarded;
         end if;
-    end process P_VALU_B_SELECT;
+    end process VALU_B_Selection;
     
-    -- ALU vetorial
-    U_VALU : entity work.vector_alu
+    -- Vectorial ALU
+    VALU : entity work.vector_alu
         port map (
             operator_a        => ex_valu_a,
             operator_b        => ex_valu_b,
@@ -544,8 +499,8 @@ begin
             alu_result  => ex_valu_result
         );
     
-    -- Comparador de Branch
-    U_BRANCH_CMP : entity work.branch_comparator
+    -- Branch Comparator
+    BRANCH_CMP : entity work.branch_comparator
         port map (
             a_i            => ex_rs1_forwarded,
             b_i            => ex_rs2_forwarded,
@@ -556,22 +511,20 @@ begin
             ne_o           => open
         );
     
-    -- Cálculo do endereço de destino
-    P_TARGET_ADDR : process(ex_pc, ex_imm, ex_jalr, ex_rs1_forwarded)
+    -- Deciding which should be the target adrress
+    Target_Address_Calculation : process(ex_pc, ex_imm, ex_jalr, ex_rs1_forwarded)
     begin
+        --In jumpalr
         if ex_jalr = '1' then
             ex_target_addr <= std_logic_vector(unsigned(ex_rs1_forwarded) + unsigned(ex_imm));
             ex_target_addr(0) <= '0';
         else
             ex_target_addr <= std_logic_vector(unsigned(ex_pc) + unsigned(ex_imm));
         end if;
-    end process P_TARGET_ADDR;
+    end process Target_Address_Calculation;
     
-    -- =========================================================================
-    -- Hazard Unit
-    -- =========================================================================
-    
-    U_HAZARD : entity work.hazard_unit
+    --Hazard Unit
+    Hazard_Unit : entity work.hazard_unit
         port map (
             rs1_id_i       => id_rs1,
             rs2_id_i       => id_rs2,
@@ -586,11 +539,9 @@ begin
             hazard_type_o  => hazard_type
         );
     
-    -- =========================================================================
-    -- Registrador EX/MEM (escalar)
-    -- =========================================================================
-    
-    U_EX_MEM : entity work.ex_mem_reg
+
+    --EX/MEM Register
+    EX_MEM_Register : entity work.ex_mem_reg
         port map (
             clk_i         => clk_i,
             reset_i       => reset_i,
@@ -620,8 +571,8 @@ begin
             jump_o        => mem_jump
         );
     
-    -- Registrador EX/MEM vetorial
-    U_EX_MEM_V : entity work.ex_mem_vreg
+    -- EX/MEM Vetorial Register
+    EX_MEM_Vectorial_Register : entity work.ex_mem_vreg
         port map (
             clk_i          => clk_i,
             reset_i        => reset_i,
@@ -637,20 +588,14 @@ begin
             vreg_write_o   => mem_vreg_write
         );
     
-    -- =========================================================================
-    -- Estágio MEM: Memory Access
-    -- =========================================================================
-    
+    -- Acessing directly the momory
     dmem_addr_o  <= mem_alu_result;
     dmem_wdata_o <= mem_rs2_data;
     dmem_we_o    <= mem_mem_write and (not load_enable_i);
     mem_read_data <= dmem_rdata_i;
     
-    -- =========================================================================
-    -- Registrador MEM/WB (escalar)
-    -- =========================================================================
-    
-    U_MEM_WB : entity work.mem_wb_reg
+    --MEM/WB Register
+    MEM_WB_Register : entity work.mem_wb_reg
         port map (
             clk_i         => clk_i,
             reset_i       => reset_i,
@@ -671,8 +616,8 @@ begin
             jump_o        => wb_jump
         );
     
-    -- Registrador MEM/WB vetorial
-    U_MEM_WB_V : entity work.mem_wb_vreg
+    -- Vectorial MEM/WB Register
+    MEM_WB_Vectorial_Register : entity work.mem_wb_vreg
         port map (
             clk_i          => clk_i,
             reset_i        => reset_i,
@@ -685,11 +630,9 @@ begin
             vreg_write_o   => wb_vreg_write
         );
     
-    -- =========================================================================
-    -- Estágio WB: Write Back
-    -- =========================================================================
     
-    P_WB_DATA_SELECT : process(wb_jump, wb_mem_to_reg, wb_pc_plus4, wb_mem_data, wb_alu_result)
+    --Selecting the data in the Writing Back Stage
+    WB_Selection : process(wb_jump, wb_mem_to_reg, wb_pc_plus4, wb_mem_data, wb_alu_result)
     begin
         if wb_jump = '1' then
             wb_write_data <= wb_pc_plus4;
@@ -698,12 +641,10 @@ begin
         else
             wb_write_data <= wb_alu_result;
         end if;
-    end process P_WB_DATA_SELECT;
+    end process WB_Selection;
     
-    -- =========================================================================
-    -- Debug Output
-    -- =========================================================================
     
+    -- Regular debugs signals used during testing
     pc_debug_o           <= if_pc;
     instr_debug_o        <= id_instruction;
     alu_result_debug_o   <= ex_alu_result;
@@ -713,7 +654,7 @@ begin
     hazard_stall_o        <= stall_if or stall_id;
     hazard_flush_o        <= flush_id or flush_ex;
     
-    -- Debug vetorial: split 128 bits em 4x32 bits para compatibilidade com Digital
+    -- Vetorial debugs signals
     vreg_debug_lane0_o    <= vreg_debug_internal(31 downto 0);
     vreg_debug_lane1_o    <= vreg_debug_internal(63 downto 32);
     vreg_debug_lane2_o    <= vreg_debug_internal(95 downto 64);
