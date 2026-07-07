@@ -9,33 +9,36 @@ use ieee.numeric_std.all;
 
 entity riscv_cpu is
     port (
-        clk_i           : in  std_logic;
-        reset_i         : in  std_logic;
-        load_enable_i   : in  std_logic;  -- Durante carga de memória, CPU pausa
+        Clock           : in  std_logic;
+        Reset           : in  std_logic;
+        load_enable_i   : in  std_logic := '0';  -- Durante carga de memória, CPU pausa
         
         -- Interface com Memória de Instruções (ROM)
-        imem_addr_o     : out std_logic_vector(31 downto 0);
-        imem_data_i     : in  std_logic_vector(31 downto 0);
+        Rom_Addr        : out std_logic_vector(31 downto 0);
+        Instruction_data: in  std_logic_vector(31 downto 0);
         
         -- Interface com Memória de Dados (RAM)
-        dmem_addr_o     : out std_logic_vector(31 downto 0);
-        dmem_wdata_o    : out std_logic_vector(31 downto 0);  -- Dados para escrita
-        dmem_rdata_i    : in  std_logic_vector(31 downto 0);  -- Dados lidos
-        dmem_we_o       : out std_logic;                       -- Write enable
+        Ram_addr        : out std_logic_vector(31 downto 0);
+        Out_to_Ram      : out std_logic_vector(31 downto 0);  -- Dados para escrita
+        Ram_Data        : in  std_logic_vector(31 downto 0);  -- Dados lidos
+        Write_to_Ram    : out std_logic;                       -- Write enable
         
         -- Debug outputs (para aferir estados internos)
-        pc_debug_o      : out std_logic_vector(31 downto 0);
-        instr_debug_o   : out std_logic_vector(31 downto 0);
-        alu_result_debug_o : out std_logic_vector(31 downto 0);
-        reg_debug_o     : out std_logic_vector(31 downto 0);
-        reg_sel_i       : in  std_logic_vector(4 downto 0);
+        PC_Counter      : out std_logic_vector(31 downto 0);
+        Prev_Instruction: out std_logic_vector(31 downto 0);
+        ALU_Result      : out std_logic_vector(31 downto 0);
+        Registrador_Debug: out std_logic_vector(31 downto 0);
+        Sel_Registrador : in  std_logic_vector(4 downto 0);
         -- Debug dos estágios do pipeline
         stage_if_pc_o   : out std_logic_vector(31 downto 0);
         stage_id_pc_o   : out std_logic_vector(31 downto 0);
         stage_ex_pc_o   : out std_logic_vector(31 downto 0);
+        ALU_Carry        : out std_logic;
+        ALU_Overflow     : out std_logic;
+        ALU_Zero         : out std_logic;
         -- Debug de hazards
-        hazard_stall_o  : out std_logic;
-        hazard_flush_o  : out std_logic
+        Stall           : out std_logic;
+        Flush           : out std_logic
     );
 end entity riscv_cpu;
 
@@ -114,6 +117,8 @@ architecture rtl of riscv_cpu is
     signal ex_alu_b       : std_logic_vector(31 downto 0);
     signal ex_alu_result  : std_logic_vector(31 downto 0);
     signal ex_alu_zero    : std_logic;
+    signal ex_alu_carry   : std_logic;
+    signal ex_alu_overflow: std_logic;
     signal ex_branch_taken: std_logic;
     signal ex_target_addr : std_logic_vector(31 downto 0);
     signal ex_forward_a   : std_logic_vector(1 downto 0);
@@ -175,8 +180,8 @@ begin
     -- Program Counter
     U_PC : entity work.program_counter
         port map (
-            clk_i          => clk_i,
-            reset_i        => reset_i,
+            clk_i          => Clock,
+            reset_i        => Reset,
             stall_i        => stall_if,
             load_enable_i  => load_enable_i,
             branch_taken_i => ex_branch_taken,
@@ -187,8 +192,8 @@ begin
         );
     
     -- Endereço para memória de instruções
-    imem_addr_o    <= if_pc;
-    if_instruction <= imem_data_i;
+    Rom_Addr       <= if_pc;
+    if_instruction <= Instruction_data;
     
     -- =========================================================================
     -- Registrador IF/ID
@@ -196,8 +201,8 @@ begin
     
     U_IF_ID : entity work.if_id_reg
         port map (
-            clk_i         => clk_i,
-            reset_i       => reset_i,
+            clk_i         => Clock,
+            reset_i       => Reset,
             stall_i       => stall_id,
             flush_i       => flush_id,
             load_enable_i => load_enable_i,
@@ -249,8 +254,8 @@ begin
     -- Banco de registradores
     U_REGFILE : entity work.register_file
         port map (
-            clk_i       => clk_i,
-            reset_i     => reset_i,
+            clk_i       => Clock,
+            reset_i     => Reset,
             we_i        => wb_reg_write,
             rs1_addr_i  => id_rs1,
             rs2_addr_i  => id_rs2,
@@ -258,8 +263,8 @@ begin
             rd_data_i   => wb_write_data,
             rs1_data_o  => id_rs1_data,
             rs2_data_o  => id_rs2_data,
-            reg_debug_o => reg_debug_o,
-            reg_sel_i   => reg_sel_i
+            reg_debug_o => Registrador_Debug,
+            reg_sel_i   => Sel_Registrador
         );
     
     -- =========================================================================
@@ -268,8 +273,8 @@ begin
     
     U_ID_EX : entity work.id_ex_reg
         port map (
-            clk_i         => clk_i,
-            reset_i       => reset_i,
+            clk_i         => Clock,
+            reset_i       => Reset,
             stall_i       => '0',
             flush_i       => flush_ex,
             load_enable_i => load_enable_i,
@@ -377,8 +382,8 @@ begin
             alu_ctrl_i => ex_alu_ctrl,
             result_o   => ex_alu_result,
             zero_o     => ex_alu_zero,
-            carry_o    => open,
-            overflow_o => open
+            carry_o    => ex_alu_carry,
+            overflow_o => ex_alu_overflow
         );
     
     -- Comparador de Branch
@@ -397,12 +402,12 @@ begin
     P_TARGET_ADDR : process(ex_pc, ex_imm, ex_jalr, ex_rs1_forwarded)
     begin
         if ex_jalr = '1' then
-            -- JALR: rs1 + imm (com bit 0 forçado a 0)
-            ex_target_addr <= std_logic_vector(unsigned(ex_rs1_forwarded) + unsigned(ex_imm));
+            -- JALR: rs1 + imm (imm pode ser negativo) -> usar aritmética com signed
+            ex_target_addr <= std_logic_vector(signed(ex_rs1_forwarded) + signed(ex_imm));
             ex_target_addr(0) <= '0';
         else
-            -- JAL/Branch: PC + imm
-            ex_target_addr <= std_logic_vector(unsigned(ex_pc) + unsigned(ex_imm));
+            -- JAL/Branch: PC + imm (imm é sinalizado) -> usar signed para permitir offsets negativos
+            ex_target_addr <= std_logic_vector(signed(ex_pc) + signed(ex_imm));
         end if;
     end process P_TARGET_ADDR;
     
@@ -431,8 +436,8 @@ begin
     
     U_EX_MEM : entity work.ex_mem_reg
         port map (
-            clk_i         => clk_i,
-            reset_i       => reset_i,
+            clk_i         => Clock,
+            reset_i       => Reset,
             flush_i       => '0',
             load_enable_i => load_enable_i,
             pc_plus4_i    => ex_pc_plus4,
@@ -464,10 +469,10 @@ begin
     -- =========================================================================
     
     -- Interface com memória de dados
-    dmem_addr_o  <= mem_alu_result;
-    dmem_wdata_o <= mem_rs2_data;
-    dmem_we_o    <= mem_mem_write and (not load_enable_i);
-    mem_read_data <= dmem_rdata_i;
+    Ram_addr      <= mem_alu_result;
+    Out_to_Ram    <= mem_rs2_data;
+    Write_to_Ram  <= mem_mem_write and (not load_enable_i);
+    mem_read_data <= Ram_Data;
     
     -- =========================================================================
     -- Registrador MEM/WB
@@ -475,8 +480,8 @@ begin
     
     U_MEM_WB : entity work.mem_wb_reg
         port map (
-            clk_i         => clk_i,
-            reset_i       => reset_i,
+            clk_i         => Clock,
+            reset_i       => Reset,
             load_enable_i => load_enable_i,
             pc_plus4_i    => mem_pc_plus4,
             alu_result_i  => mem_alu_result,
@@ -517,13 +522,16 @@ begin
     -- Saídas de Debug
     -- =========================================================================
     
-    pc_debug_o         <= if_pc;
-    instr_debug_o      <= id_instruction;
-    alu_result_debug_o <= ex_alu_result;
+    PC_Counter         <= if_pc;
+    Prev_Instruction   <= id_instruction;
+    ALU_Result         <= ex_alu_result;
+    ALU_Carry          <= ex_alu_carry;
+    ALU_Overflow       <= ex_alu_overflow;
+    ALU_Zero           <= ex_alu_zero;
     stage_if_pc_o      <= if_pc;
     stage_id_pc_o      <= id_pc;
     stage_ex_pc_o      <= ex_pc;
-    hazard_stall_o     <= stall_if or stall_id;
-    hazard_flush_o     <= flush_id or flush_ex;
+    Stall              <= stall_if or stall_id;
+    Flush              <= flush_id or flush_ex;
 
 end architecture rtl;

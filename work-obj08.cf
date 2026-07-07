@@ -1,0 +1,42 @@
+v 4
+file "C:\Users\RiverNet\AppData\Local\Temp\digital_vhdl_6364089738944131012\" "riscv_cpu.vhdl" "cba5a493ff49a1f184ae209bd33f4aaf8ff4f58d" "20260707234610.906":
+  entity riscv_cpu at 6( 264) + 0 on 801;
+  architecture rtl of riscv_cpu at 45( 1976) + 0 on 802;
+  entity stdiointerface at 540( 22635) + 0 on 803;
+  architecture stdiointerface_a of stdiointerface at 546( 22730) + 0 on 804;
+file "C:\Users\RiverNet\Documents\Coding\RiscVtrabalho\RISC-V-EEL580---Computer-Architecture-meu\" "register_file_tb.vhd" "13e5132b1fe2ef4277f0e6a842bd42fc79a8daa1" "20260707221009.466":
+  entity register_file_tb at 1( 0) + 0 on 221;
+  architecture sim of register_file_tb at 8( 117) + 0 on 222;
+file "C:\Users\RiverNet\Documents\Coding\RiscVtrabalho\RISC-V-EEL580---Computer-Architecture-meu\" "program_counter.vhd" "fa88cd03cf6d9f5ea5f74b9507909b5074662113" "20260707233654.526":
+  entity program_counter at 1( 0) + 0 on 767;
+  architecture rtl of program_counter at 21( 728) + 0 on 768;
+file "C:\Users\RiverNet\Documents\Coding\RiscVtrabalho\RISC-V-EEL580---Computer-Architecture-meu\" "forwarding_unit.vhd" "2a999b6f1656226030851138f7a1dd01ab45de64" "20260707233654.329":
+  entity forwarding_unit at 1( 0) + 0 on 763;
+  architecture rtl of forwarding_unit at 18( 601) + 0 on 764;
+file "C:\Users\RiverNet\Documents\Coding\RiscVtrabalho\RISC-V-EEL580---Computer-Architecture-meu\" "pipeline_regs.vhd" "52d1a61bbadd055995d5d21009ac784e8ff037b9" "20260707233653.936":
+  entity if_id_reg at 7( 315) + 0 on 753;
+  architecture rtl of if_id_reg at 31( 1396) + 0 on 754;
+  entity id_ex_reg at 67( 2975) + 0 on 755;
+  architecture rtl of id_ex_reg at 123( 5381) + 0 on 756;
+  entity ex_mem_reg at 243( 10802) + 0 on 757;
+  architecture rtl of ex_mem_reg at 280( 12280) + 0 on 758;
+  entity mem_wb_reg at 354( 15403) + 0 on 759;
+  architecture rtl of mem_wb_reg at 382( 16486) + 0 on 760;
+file "C:\Users\RiverNet\Documents\Coding\RiscVtrabalho\RISC-V-EEL580---Computer-Architecture-meu\" "instruction_decoder.vhd" "38702a8a3ec3b4b712a71ee77dd27504af7aaf4c" "20260707233653.696":
+  entity instruction_decoder at 1( 0) + 0 on 749;
+  architecture rtl of instruction_decoder at 19( 641) + 0 on 750;
+file "C:\Users\RiverNet\Documents\Coding\RiscVtrabalho\RISC-V-EEL580---Computer-Architecture-meu\" "alu.vhd" "3851a920c4d5cee81e5cfb4471da543a84aa0835" "20260707233653.450":
+  entity alu at 1( 0) + 0 on 745;
+  architecture main of alu at 23( 868) + 0 on 746;
+file "C:\Users\RiverNet\Documents\Coding\RiscVtrabalho\RISC-V-EEL580---Computer-Architecture-meu\" "register_file.vhd" "baa59fa7e2a7fbccd5cdd29c004147760d9a4467" "20260707233653.592":
+  entity register_file at 1( 0) + 0 on 747;
+  architecture rtl of register_file at 28( 975) + 0 on 748;
+file "C:\Users\RiverNet\Documents\Coding\RiscVtrabalho\RISC-V-EEL580---Computer-Architecture-meu\" "control_unit.vhd" "9157aa73dbb7baa5b6bc53296128016ffbac3583" "20260707233653.818":
+  entity control_unit at 1( 0) + 0 on 751;
+  architecture rtl of control_unit at 27( 1229) + 0 on 752;
+file "C:\Users\RiverNet\Documents\Coding\RiscVtrabalho\RISC-V-EEL580---Computer-Architecture-meu\" "hazard_unit.vhd" "ac2879d689a49b6f92d40ea50a46f6549bdc533b" "20260707233654.246":
+  entity hazard_unit at 2( 2) + 0 on 761;
+  architecture rtl of hazard_unit at 22( 720) + 0 on 762;
+file "C:\Users\RiverNet\Documents\Coding\RiscVtrabalho\RISC-V-EEL580---Computer-Architecture-meu\" "branch_comparator.vhd" "1e9cbc32e5cec50cfc07fa2f9b183678b47b70b9" "20260707233654.419":
+  entity branch_comparator at 2( 2) + 0 on 765;
+  architecture rtl of branch_comparator at 23( 686) + 0 on 766;

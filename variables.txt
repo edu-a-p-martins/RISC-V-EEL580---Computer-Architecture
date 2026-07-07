@@ -1,0 +1,11 @@
+entradas antigas
+clk_i,reset_i,load_enable_i,imem_data_i:32,dmem_rdata_i:32,reg_sel_i:5
+
+
+
+
+saidas antigas
+
+
+
+saidas novas

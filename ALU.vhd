@@ -3,61 +3,77 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 
-entity ALU is
+entity alu is
 
     port(
-        operator_a  : in std_logic_vector(31 downto 0); -- Operand A
-        operator_b  : in std_logic_vector(31 downto 0); -- Operand B
-        alu_operation : in std_logic_vector(3 downto 0); -- Selects the type of operation
+        a_i  : in std_logic_vector(31 downto 0); -- Operand A
+        b_i  : in std_logic_vector(31 downto 0); -- Operand B
+        alu_ctrl_i : in std_logic_vector(3 downto 0); -- Selects the type of operation  
+        result_o : out std_logic_vector(31 downto 0); --The result given from the operation
+        zero_o : out std_logic; -- Flag Zero      
+        carry_o    : out std_logic;                      -- carry 
+        overflow_o : out std_logic;                       -- overflow
+        zero_o_debug : out std_logic; -- Flag Zero for debug
+        carry_o_debug    : out std_logic;                      -- carry for debug
+        overflow_o_debug : out std_logic                       -- overflow for debug
+        );
 
-        zero_flag : out std_logic; -- Flag Zero
-        alu_result : out std_logic_vector(31 downto 0) --The result given from the operation
-    );
+end entity alu;
 
-end entity ALU;
+architecture main of alu is
 
-architecture main of ALU is
+    -- Constantes para controle da ALU
+    constant ALU_ADD    : std_logic_vector(3 downto 0) := "0000";
+    constant ALU_SUB    : std_logic_vector(3 downto 0) := "0001";
+    constant ALU_AND    : std_logic_vector(3 downto 0) := "0010";
+    constant ALU_OR     : std_logic_vector(3 downto 0) := "0011";
+    constant ALU_XOR    : std_logic_vector(3 downto 0) := "0100";
+    constant ALU_SLL    : std_logic_vector(3 downto 0) := "0101";
+    constant ALU_SRL    : std_logic_vector(3 downto 0) := "0110";
+    constant ALU_PASS_B : std_logic_vector(3 downto 0) := "0111";
 
-    --Signals used in the middle of the process
-    signal result : std_logic_vector(31 downto 0);
+    -- Sinais internos para cálculo e flags
+    signal result_internal : std_logic_vector(31 downto 0);
+    signal add_result      : std_logic_vector(32 downto 0);
+    signal sub_result      : std_logic_vector(32 downto 0);
+    signal shamt           : natural range 0 to 31;
 begin
 
-    ALU_calculation : process(operator_a, operator_b, alu_operation)
+    shamt <= to_integer(unsigned(b_i(4 downto 0)));
+    add_result <= std_logic_vector(unsigned('0' & a_i) + unsigned('0' & b_i));
+    sub_result <= std_logic_vector(unsigned('0' & a_i) - unsigned('0' & b_i));
+
+    ALU_calculation : process(a_i, b_i, alu_ctrl_i, add_result, sub_result, shamt)
     begin
-        -- Does the calculations
-        case alu_operation is
-            --Addition 
-            when "0000" =>
-                result <= std_logic_vector(signed(operator_a) + signed(operator_b));
-            --Subtraction 
-            when "0001" =>
-                result <= std_logic_vector(signed(operator_a) - signed(operator_b));
-            --AND
-            when "0010" =>
-                result <= operator_a and operator_b;
-            --OR 
-            when "0011" =>
-                result <= operator_a or operator_b;
-            --XOR 
-            when "0100" =>
-                result <= operator_a xor operator_b;
-            --Shift left 
-            when "0101" =>
-                result <= std_logic_vector(shift_left(unsigned(operator_a), to_integer(unsigned(operator_b(4 downto 0)))));
-            --Shift right  
-            when "0110" =>
-                result <= std_logic_vector(shift_right(unsigned(operator_a), to_integer(unsigned(operator_b(4 downto 0)))));
-            --Pass B with a 12 bit shift
-            when "0111" =>
-                result <= operator_b(19 downto 0) & x"000";
+        case alu_ctrl_i is
+            when ALU_ADD =>
+                result_internal <= add_result(31 downto 0);
+            when ALU_SUB =>
+                result_internal <= sub_result(31 downto 0);
+            when ALU_AND =>
+                result_internal <= a_i and b_i;
+            when ALU_OR =>
+                result_internal <= a_i or b_i;
+            when ALU_XOR =>
+                result_internal <= a_i xor b_i;
+            when ALU_SLL =>
+                result_internal <= std_logic_vector(shift_left(unsigned(a_i), shamt));
+            when ALU_SRL =>
+                result_internal <= std_logic_vector(shift_right(unsigned(a_i), shamt));
+            when ALU_PASS_B =>
+                result_internal <= b_i;
             when others =>
-                result <= (others => '0');
+                result_internal <= (others => '0');
         end case;
     end process ALU_calculation;
 
-    --Gives final outputs
-    alu_result <= result;
-    zero_flag <= '1' when unsigned(result) = 0 else '0';
-
-
+    result_o <= result_internal;
+    zero_o <= '1' when result_internal = x"00000000" else '0';
+    carry_o <= add_result(32) when alu_ctrl_i = ALU_ADD else '0';
+    overflow_o <= ((not a_i(31) and not b_i(31) and result_internal(31)) or
+                   (a_i(31) and b_i(31) and not result_internal(31)))
+                  when alu_ctrl_i = ALU_ADD else '0';
+    zero_o_debug <= zero_o;
+    carry_o_debug <= carry_o;
+    overflow_o_debug <= overflow_o;
 end architecture main;

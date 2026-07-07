@@ -1,21 +1,26 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
--- sinal de reset estava assincrono, agora eh sincrono
+-- sinal de reset_i estava assincrono, agora eh sincrono
 
 entity register_file is
-    port 
-        clk : in std_logic;
-        reset : in std_logic;
-        write : in std_logic; --Responsible from allowing to write in the other registers
-        register1_address : in std_logic_vector(4 downto 0);
-        register2_address : in std_logic_vector(4 downto 0);
-        registerdestination_address : in std_logic_vector(4 downto 0);
-        registerdestination_wdata : in std_logic_vector(31 downto 0); --Data that will be written in the register 
+    port( 
+        clk_i : in std_logic;
+        reset_i : in std_logic;
+        we_i : in std_logic; --Responsible from allowing to we_i in the other registers
+
+        rs1_addr_i : in std_logic_vector(4 downto 0);
+        rs2_addr_i : in std_logic_vector(4 downto 0);
+        rd_addr_i : in std_logic_vector(4 downto 0);
+
+        rd_data_i : in std_logic_vector(31 downto 0); --Data that will be written in the register 
 
         --Data extracted from the registers
-        register1_data : out std_logic_vector(31 downto 0);
-        register2_data : out std_logic_vector(31 downto 0)
+        rs1_data_o : out std_logic_vector(31 downto 0);
+        rs2_data_o : out std_logic_vector(31 downto 0);
+        reg_debug_o  : out std_logic_vector(31 downto 0);  -- Registrador selecionado para debug
+        reg_sel_i    : in  std_logic_vector(4 downto 0)    -- Seleção de registrador para debug
+
 
     );
 end entity;
@@ -26,23 +31,34 @@ architecture rtl of register_file is
     type register_array is array (0 to 31) of std_logic_vector(31 downto 0); 
     signal registers : register_array := (others => (others => '0'));
 begin
-    --Synchronous reset and writing
-    write_process : process(clk)
+    --Synchronous reset_i and writing
+    write_process : process(clk_i)
     begin
-        if rising_edge(clk) then
-            if reset = '1' then
+        if rising_edge(clk_i) then
+            if reset_i = '1' then
                 --Resets all of the registers (synchronous)
                 registers <= (others => (others => '0'));
             else
                 --Writing the value in the register
-                if write = '1' and registerdestination_address /= "00000" then
-                    registers(to_integer(unsigned(registerdestination_address))) <= registerdestination_wdata;
+                if we_i = '1' and rd_addr_i /= "00000" then
+                    registers(to_integer(unsigned(rd_addr_i))) <= rd_data_i;
                 end if;
             end if;
         end if;
     end process;
     --Assincronou reading process
-    register1_data <= (others => '0') when register1_address = "00000" else registers(to_integer(unsigned(register1_address)));
-    register2_data <= (others => '0') when register2_address = "00000" else registers(to_integer(unsigned(register2_address)));
+    rs1_data_o <= (others => '0') when rs1_addr_i = "00000" else registers(to_integer(unsigned(rs1_addr_i)));
+    rs2_data_o <= (others => '0') when rs2_addr_i = "00000" else registers(to_integer(unsigned(rs2_addr_i)));
+
+    debug_process : process(all)
+    begin
+        if reset_i = '1' then
+            reg_debug_o <= (others => '0');
+        elsif reg_sel_i = "00000" then
+            reg_debug_o <= (others => '0');
+        else
+            reg_debug_o <= registers(to_integer(unsigned(reg_sel_i)));
+        end if;
+    end process;
 
 end architecture;
